@@ -69,6 +69,21 @@ case class CRFModel (
     tests.map(this.testCRF(_, costFactor))
   }
 
+  def predict(
+               tests: RDD[Sequence],
+               costFactor: Double, verbose_level: Int): RDD[Sequence] = {
+    val bcModel = tests.context.broadcast(this)
+    tests.map { test =>
+      bcModel.value.testCRF(test, costFactor, verbose_level)
+    }
+  }
+
+  def predict(
+               tests: Array[Sequence],
+               costFactor: Double, verbose_level: Int): Array[Sequence] = {
+    tests.map(this.testCRF(_, costFactor, verbose_level))
+  }
+
   def predict(tests: RDD[Sequence]): RDD[Sequence] = {
     predict(tests, 1.0)
   }
@@ -96,6 +111,43 @@ case class CRFModel (
       Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
     ))
   }
+
+  /**
+    * Internal method to test the CRF model
+    *
+    * @param test the sequence to be tested
+    * @return the sequence along with predictive labels
+    */
+  def testCRF(test: Sequence,
+              costFactor: Double, verbose_level: Int): Sequence = {
+    val deFeatureIdx = new FeatureIndex()
+    deFeatureIdx.readModel(this)
+    val tagger = new Tagger(deFeatureIdx.labels.size, TestMode)
+    tagger.setCostFactor(costFactor)
+    tagger.read(test, deFeatureIdx)
+    deFeatureIdx.buildFeatures(tagger)
+    tagger.parse(deFeatureIdx.alpha)
+    val tokens = new ArrayBuffer[Token] ()
+    val labels = deFeatureIdx.labels
+    val tmp = test.toArray
+    for( i <- tmp.indices) {
+      val probMat = new ArrayBuffer[(String, Double)]()
+      if(verbose_level == 1) {
+        probMat.append( (labels( tagger.result(i) ), tagger.probMatrix( i * labels.length + tagger.result(i) ) ) )
+      }
+      else if(verbose_level == 2) {
+        for( j <- labels.indices){
+          probMat.append( (labels(j), tagger.probMatrix( i * labels.length + j) ) )
+        }
+      }
+      tokens.append( Token.put( labels( tagger.result(i) ), tmp(i).tags ).setProb(probMat.toArray))
+    }
+    //println( Sequence.probSerializer(Sequence(tokens.toArray).setSeqProb(tagger.seqProb)) )
+    Sequence(tokens.toArray).setSeqProb(tagger.seqProb)
+
+
+  }
+
 }
 
 object CRFModel {
