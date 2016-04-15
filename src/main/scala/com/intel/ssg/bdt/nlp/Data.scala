@@ -17,6 +17,8 @@
 
 package com.intel.ssg.bdt.nlp
 
+import scala.collection.mutable.ArrayBuffer
+
 /**
   * Class that represents the columns of a token.
   *
@@ -26,6 +28,13 @@ package com.intel.ssg.bdt.nlp
 class Token(
     val label: String,
     val tags: Array[String]) extends Serializable {
+  var prob : Array[(String, Double)] = null
+
+  def setProb(probMat: Array[(String, Double)]): Token ={
+    this.prob = probMat
+    this
+  }
+
   override def toString: String = {
     s"$label|--|${tags.mkString("|-|")}"
   }
@@ -52,6 +61,15 @@ object Token {
     token.toString
   }
 
+  def probSerializer(token: Token): String = {
+    val strRes = new StringBuffer()
+    strRes.append( token.tags.mkString("\t") )
+    strRes.append( "\t" + token.label + "\t")
+    strRes.append(token.prob.map{
+      case (str, p) => str + "/" + p.toString
+    }.mkString("\t") )
+    strRes.toString
+  }
   def put(label: String, tags: Array[String]) = {
     new Token(label, tags)
   }
@@ -67,6 +85,13 @@ object Token {
   * @param sequence List of tokens
   */
 case class Sequence (sequence: Array[Token]) extends Serializable {
+  var seqProb : Double= 0.0
+
+  def setSeqProb(seqProb: Double): Sequence ={
+    this.seqProb = seqProb
+    this
+  }
+
   override def toString: String = {
     s"${sequence.mkString("\t")}"
   }
@@ -85,5 +110,11 @@ object Sequence {
   }
   def serializer(sequence: Sequence): String = {
     sequence.toString
+  }
+  def probSerializer(sequence: Sequence): String = {
+    val strRes = new ArrayBuffer[String]()
+    strRes.append("#" + sequence.seqProb.toString)
+    strRes ++= sequence.toArray.map( token =>Token.probSerializer(token) )
+    strRes.mkString("\n")
   }
 }
