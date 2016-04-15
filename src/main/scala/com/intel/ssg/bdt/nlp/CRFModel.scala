@@ -127,16 +127,6 @@ case class CRFModel (
     tagger.read(test, deFeatureIdx)
     deFeatureIdx.buildFeatures(tagger)
     tagger.parse(deFeatureIdx.alpha)
-    //    Sequence(
-    //      var i = -1
-    //      test.toArray.map { x =>
-    //        i = i + 1
-    //        val probMat = new ArrayBuffer[(String, Double)]()
-    //        for (j <- deFeatureIdx.labels.indices) {
-    //          probMat.append((deFeatureIdx.labels(i), tagger.probMatrix(i * deFeatureIdx.labels.length + j)))
-    //        }
-    //        Token.put(deFeatureIdx.labels(tagger.result(i)), x.tags)//.setProb(probMat)
-    //      })
     val tokens = new ArrayBuffer[Token] ()
     val labels = deFeatureIdx.labels
     val tmp = test.toArray
