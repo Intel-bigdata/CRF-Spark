@@ -58,7 +58,7 @@ object CRFFromParsedFile {
     /**
       * still use the model in memory to predict
       */
-    val results = model.predict(testRDD)
+    val results = model.predict(testRDD, 1, 2)
     val score = results
       .zipWithIndex()
       .map(_.swap)
