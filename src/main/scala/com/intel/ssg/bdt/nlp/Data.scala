@@ -61,7 +61,7 @@ object Token {
     token.toString
   }
 
-  def probSerializer(token: Token): String = {
+  def probPrinter(token: Token): String = {
     val strRes = new StringBuffer()
     strRes.append( token.tags.mkString("\t") )
     strRes.append( "\t" + token.label + "\t")
@@ -87,10 +87,42 @@ object Token {
   */
 case class Sequence (sequence: Array[Token]) extends Serializable {
   var seqProb = 0.0
+  var candidates: Array[Sequence] = null
 
   def setSeqProb(seqProb: Double): Sequence ={
     this.seqProb = seqProb
     this
+  }
+
+  def setCandidates(nBest: ArrayBuffer[Array[Int]],
+    probN: ArrayBuffer[Double],
+    labels: ArrayBuffer[String]) = {
+    val tmp = new ArrayBuffer[Sequence]()
+    for(i <- nBest.indices) {
+      val tokens = new ArrayBuffer[Token]()
+      for(j <- sequence.indices) {
+        tokens += Token.put(labels(nBest(i)(j)), sequence(j).tags)
+      }
+      tmp += Sequence(tokens.toArray).setSeqProb(probN(i))
+    }
+    this.candidates = tmp.toArray
+    this
+  }
+
+  def nthPrint( k: Int): String = {
+    val strRes = new ArrayBuffer[String]()
+    strRes.append("#" + k + "\t" +candidates(k).seqProb.toString)
+    val pairs = this.candidates(k).toArray
+    for(i <- pairs.indices) {
+      strRes.append(pairs(i).tags.mkString("\t") + "\t" + pairs(i).label)
+    }
+    strRes.mkString("\n")
+  }
+
+  def nBestPrint(): String = {
+    val idx = candidates.indices
+    idx.map(t =>nthPrint(t))
+      .mkString("\n")
   }
 
   override def toString: String = {
@@ -100,7 +132,7 @@ case class Sequence (sequence: Array[Token]) extends Serializable {
   def toArray: Array[Token] = sequence
 
   def compare(other: Sequence): Int = {
-    this.toArray.zip(other.toArray).map{case(one, other) => one.compare(other)}.sum
+    this.toArray.zip(other.toArray).map{case(one, two) => one.compare(two)}.sum
   }
 }
 
@@ -112,10 +144,10 @@ object Sequence {
   def serializer(sequence: Sequence): String = {
     sequence.toString
   }
-  def probSerializer(sequence: Sequence): String = {
+  def probPrinter(sequence: Sequence): String = {
     val strRes = new ArrayBuffer[String]()
     strRes.append("#" + sequence.seqProb.toString)
-    strRes ++= sequence.toArray.map( token =>Token.probSerializer(token) )
+    strRes ++= sequence.toArray.map( token =>Token.probPrinter(token) )
     strRes.mkString("\n")
   }
 }

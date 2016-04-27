@@ -38,6 +38,24 @@ case class CRFModel (
 
   private var verboseMode: Option[VerboseMode] = None
 
+  private var nBest =  0
+  private var costFactor = 1.0
+
+  def setNBest(nBest: Int): CRFModel = {
+    this.nBest = nBest
+    this
+  }
+
+  def setVerboseMode(mode: VerboseMode) = {
+    this.verboseMode = Some(mode)
+    this
+  }
+
+  def setcostFact(cf: Double) = {
+    this.costFactor = cf
+    this
+  }
+
   override def toString: String = {
     val dicString = dic.map{case(k, v) => k + "|-|" + v.toString}
     s"${head.mkString("\t")}|--|${dicString.mkString("\t")}|--|${alpha.map(_.toFloat).mkString("\t")}"
@@ -59,62 +77,18 @@ case class CRFModel (
     * Verify CRF model
     *
     * @param tests  Source files to be verified
-    * @param costFactor cost factor
     * @return Source files with the predictive labels
     */
-  def predict(
-      tests: RDD[Sequence],
-      costFactor: Double): RDD[Sequence] = {
+  def predict(tests: RDD[Sequence]): RDD[Sequence] = {
     val bcModel = tests.context.broadcast(this)
     tests.map { test =>
       bcModel.value.testCRF(test, costFactor, verboseMode)
     }
   }
 
-  def predict(
-      tests: Array[Sequence],
-      costFactor: Double): Array[Sequence] = {
+  def predict(tests: Array[Sequence]): Array[Sequence] = {
     tests.map(this.testCRF(_, costFactor, verboseMode))
   }
-
-  def predict(tests: RDD[Sequence]): RDD[Sequence] = {
-    predict(tests, 1.0)
-  }
-
-  def predict(tests: Array[Sequence]): Array[Sequence] = {
-    predict(tests, 1.0)
-  }
-
-  def predict(
-    tests: RDD[Sequence],
-    costFactor: Double,
-    mode: VerboseMode): RDD[Sequence] = {
-    verboseMode = Some(mode)
-    predict(tests, costFactor)
-  }
-
-  def predict(
-    tests: Array[Sequence],
-    costFactor: Double,
-    mode: VerboseMode): Array[Sequence] = {
-    verboseMode = Some(mode)
-    predict(tests, costFactor)
-  }
-
-  def predict(
-    tests: RDD[Sequence],
-    mode: VerboseMode): RDD[Sequence] = {
-    verboseMode = Some(mode)
-    predict(tests, 1.0)
-  }
-
-  def predict(
-    tests: Array[Sequence],
-    mode: VerboseMode): Array[Sequence] = {
-    verboseMode = Some(mode)
-    predict(tests, 1.0)
-  }
-
   /**
     * Internal method to test the CRF model
     *
@@ -127,9 +101,11 @@ case class CRFModel (
     deFeatureIdx.readModel(this)
     val tagger = new Tagger(deFeatureIdx.labels.size, TestMode)
     tagger.setCostFactor(costFactor)
+    tagger.setNBest(nBest)
     tagger.read(test, deFeatureIdx)
     deFeatureIdx.buildFeatures(tagger)
     tagger.parse(deFeatureIdx.alpha, vMode)
+    var Seq: Sequence = null
     if (vMode.isDefined) {
       val tokens = new ArrayBuffer[Token]()
       val labels = deFeatureIdx.labels
@@ -146,13 +122,18 @@ case class CRFModel (
         }
         tokens.append(Token.put(labels(tagger.result(i)), tmp(i).tags).setProb(probMat.toArray))
       }
-      Sequence(tokens.toArray).setSeqProb(tagger.seqProb)
+      Seq = Sequence(tokens.toArray).setSeqProb(tagger.seqProb)
     }
     else {
-      Sequence(test.toArray.map(x =>
+      Seq = Sequence(test.toArray.map(x =>
         Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
       ))
     }
+    if(nBest > 1)
+      Seq.setCandidates(tagger.topN, tagger.probN, deFeatureIdx.labels )
+
+    println(Seq.nBestPrint())
+    Seq
   }
 }
 
