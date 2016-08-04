@@ -49,15 +49,21 @@ private[nlp] class Node extends Serializable {
 
   def calcAlpha(nodes: ArrayBuffer[Node]): Unit = {
     alpha = 0.0
-    for(i <- lPath.indices)
+    var i = 0
+    while (i < lPath.length) {
       alpha = logSumExp(alpha, lPath(i).cost + nodes(lPath(i).lNode).alpha, i == 0)
+      i += 1
+    }
     alpha += cost
   }
 
   def calcBeta(nodes: ArrayBuffer[Node]): Unit = {
     beta = 0.0
-    for(i <- rPath.indices)
+    var i = 0
+    while (i < rPath.length) {
       beta = logSumExp(beta, rPath(i).cost + nodes(rPath(i).rNode).beta, i == 0)
+      i += 1
+    }
     beta += cost
   }
 
@@ -75,8 +81,11 @@ private[nlp] class Node extends Serializable {
       idx += 1
     }
 
-    for(i <- lPath.indices)
+    var i = 0
+    while (i < lPath.length) {
       lPath(i).calExpectation(expected, Z, size, featureCache, nodes)
+      i += 1
+    }
 
   }
 }

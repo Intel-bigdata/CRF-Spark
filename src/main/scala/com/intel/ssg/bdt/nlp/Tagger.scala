@@ -64,20 +64,30 @@ private[nlp] class Tagger (
   }
 
   def read(lines: Sequence, feature_idx: FeatureIndex) = {
-    lines.toArray.foreach{ t =>
+    var i = 0
+    while (i < lines.toArray.length) {
+      val t = lines.toArray(i)
       mode match {
-      case LearnMode =>
-        for (y <- feature_idx.labels if y.equals(t.label))
-          answer.append(feature_idx.labels.indexOf(y))
-        x.append(t.tags)
-      case TestMode =>
-        x.append(t.tags)
-        answer.append(0)
+        case LearnMode =>
+          var j = 0
+          while (j < feature_idx.labels.length) {
+            if (feature_idx.labels(j).equals(t.label)) {
+              answer.append(j)
+            }
+            j += 1
+          }
+
+          x.append(t.tags)
+        case TestMode =>
+          x.append(t.tags)
+          answer.append(0)
       }
       result.append(0)
+      i += 1
     }
     this
   }
+
 
   /**
    * Set node relationship and its feature index.
@@ -86,18 +96,28 @@ private[nlp] class Tagger (
   def rebuildFeatures(): Unit = {
 
     nodes ++= Array.fill(x.length * ySize)(new Node)
-    nodes.zipWithIndex.foreach{ case(n, index) =>
-      n.x = index / ySize
-      n.y = index - n.x * ySize
-      n.fVector = featureCacheIndex(n.x)
+    var i = 0
+    while (i < nodes.length) {
+      nodes(i).x = i / ySize
+      nodes(i).y = i - nodes(i).x * ySize
+      nodes(i).fVector = featureCacheIndex(nodes(i).x)
+      i += 1
     }
 
-    nodes.filter(_.x > 0).foreach{ n =>
-      val paths = Array.fill(ySize)(new Path)
-      paths.zipWithIndex.foreach { case(p, indexP) =>
-        p.fVector = featureCacheIndex(n.x + x.length - 1)
-        p.add((n.x - 1) * ySize + n.y, n.x * ySize + indexP, nodes)
+    i = 0
+    while (i < nodes.length) {
+      if (nodes(i).x > 0) {
+        val paths = Array.fill(ySize)(new Path)
+        val nx = nodes(i).x
+        val ny = nodes(i).y
+        var j = 0
+        while (j < paths.length) {
+          paths(j).fVector = featureCacheIndex(nx + x.length - 1)
+          paths(j).add((nx - 1) * ySize + ny, nx * ySize + j, nodes)
+          j += 1
+        }
       }
+      i += 1
     }
   }
 
@@ -105,10 +125,24 @@ private[nlp] class Tagger (
    * Calculate the expectation of each node
    */
   def forwardBackward(): Unit = {
-    nodes.foreach(_.calcAlpha(nodes))
-    nodes.reverse.foreach(_.calcBeta(nodes))
+    var i = 0
+    while (i < nodes.length) {
+      nodes(i).calcAlpha(nodes)
+      i += 1
+    }
+    i = 0
+    while (i < nodes.reverse.length) {
+      nodes.reverse(i).calcBeta(nodes)
+      i += 1
+    }
     Z = 0.0
-    nodes.filter(_.x == 0).foreach(n => Z = n.logSumExp(Z, n.beta, n.y == 0))
+    i = 0
+    while (i < nodes.length) {
+      if (nodes(i).x == 0) {
+        Z = nodes(i).logSumExp(Z, nodes(i).beta, nodes(i).y == 0)
+      }
+      i += 1
+    }
   }
 
   /**
@@ -118,23 +152,28 @@ private[nlp] class Tagger (
     var bestCost = Double.MinValue
     var best: Option[Node] = None
 
-    nodes.foreach { n =>
+    var i = 0
+    while (i < nodes.length) {
       bestCost = Double.MinValue
       best = None
-      n.lPath.foreach { p =>
-        val cost = nodes(p.lNode).bestCost + p.cost + n.cost
+      var j = 0
+      while (j < nodes(i).lPath.length) {
+        val p = nodes(i).lPath(j)
+        val cost = nodes(p.lNode).bestCost + p.cost + nodes(i).cost
         if (cost > bestCost) {
           bestCost = cost
           best = Some(nodes(p.lNode))
         }
+        j += 1
       }
-      n.prev = best
+      nodes(i).prev = best
       best match {
         case None =>
-          n.bestCost = n.cost
+          nodes(i).bestCost = nodes(i).cost
         case _ =>
-          n.bestCost = bestCost
+          nodes(i).bestCost = bestCost
       }
+      i += 1
     }
 
     var nd: Option[Node] = Some(nodes.filter(_.x == x.length - 1).max(Ordering.by((_:Node).bestCost)))
@@ -152,10 +191,15 @@ private[nlp] class Tagger (
     buildLattice(alpha)
     forwardBackward()
 
-    nodes.foreach(_.calExpectation(expected, Z, ySize, featureCache, nodes))
+    var i = 0
+    while (i < nodes.length) {
+      nodes(i).calExpectation(expected, Z, ySize, featureCache, nodes)
+      i += 1
+    }
 
     var s: Double = 0.0
-    for (i <- x.indices) {
+    i = 0
+    while (i < x.length) {
       var rIdx = nodes(i * ySize + answer(i)).fVector
       while (featureCache(rIdx) != -1) {
         expected(featureCache(rIdx) + answer(i)) -= 1.0
@@ -177,6 +221,7 @@ private[nlp] class Tagger (
         }
         j += 1
       }
+      i += 1
     }
 
     viterbi()
@@ -187,18 +232,23 @@ private[nlp] class Tagger (
   def probCalculate(): Unit ={
     probMatrix  ++= Array.fill(x.length * ySize)(0.0)
     var idx :Int = 0
-    nodes.foreach{ n =>
+    var i = 0
+    while (i < nodes.length) {
+      val n = nodes(i)
       idx = n.x * ySize + n.y
       probMatrix(idx) = Math.exp(n.alpha + n.beta - n.cost - Z)
+      i += 1
     }
     this.seqProb = Math.exp(- cost - Z)
 
   }
 
   def clear(): Unit = {
-    nodes foreach{ n =>
-      n.lPath.clear()
-      n.rPath.clear()
+    var i = 0
+    while (i < nodes.length) {
+      nodes(i).lPath.clear()
+      nodes(i).rPath.clear()
+      i += 1
     }
     nodes.clear()
   }
@@ -215,15 +265,22 @@ private[nlp] class Tagger (
     if(nBest > 0) {
       //initialize nBest
       if(agenda.nonEmpty) agenda.clear()
-      nodes.slice((x.size - 1) * ySize, x.size * ySize - 1)
-        .foreach(n => agenda += QueueElement(n, - n.bestCost, - n.cost, null))
+      val nodesTemp = nodes.slice((x.size - 1) * ySize, x.size * ySize - 1)
+      var i = 0
+      while (i < nodesTemp.length) {
+        val n = nodesTemp(i)
+        agenda += QueueElement(n, - n.bestCost, - n.cost, null)
+        i += 1
+      }
       //find nBest
-      for(i <- 0 until this.nBest) {
+      i = 0
+      while (i < this.nBest) {
         topNResult.clear()
         if(!nextNode)
           return
         probN.append(Math.exp(- cost - Z))
         topN.append(topNResult.toArray)
+        i += 1
       }
     }
   }
@@ -231,9 +288,22 @@ private[nlp] class Tagger (
   def buildLattice(alpha: BDV[Double]): Unit = {
 
     rebuildFeatures()
-    nodes.foreach { n =>
-      val nn = calcCost(n, alpha)
-      nn.lPath.foreach(calcCost(_, alpha))
+    var i = 0
+    while (i < nodes.length) {
+      val nn = calcCost(nodes(i), alpha)
+      var j = 0
+      while (j < nn.lPath.length) {
+        calcCost(nn.lPath(j), alpha)
+        j += 1
+      }
+      i += 1
+      nn
+    }
+
+    i = 0
+    while (i < nodes.length) {
+      val nn = calcCost(nodes(i), alpha)
+      i += 1
       nn
     }
   }
@@ -275,17 +345,22 @@ private[nlp] class Tagger (
       rNode = top.node
       if(rNode.x == 0) {
         var n: QueueElement = top
-        for(i <- x.indices) {
+        var i = 0
+        while (i < x.length) {
           topNResult.append(n.node.y)
           n = n.next
+          i += 1
         }
         cost = top.gx
         return true
       }
-      rNode.lPath.foreach { p =>
+      var i = 0
+      while (i < rNode.lPath.length) {
+        val p = rNode.lPath(i)
         val gx = -nodes(p.lNode).cost - p.cost + top.gx
         val fx = - nodes(p.lNode).bestCost - p.cost + top.gx
         agenda  += QueueElement(nodes(p.lNode), fx, gx, top)
+        i += 1
       }
     }
     false
